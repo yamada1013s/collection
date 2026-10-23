@@ -49,6 +49,8 @@ textarea.field{resize:vertical}
 .scanrow{display:grid;grid-template-columns:1fr auto;gap:8px}
 .scanbtn{padding:0 16px;border:1px solid var(--accent);border-radius:8px;background:var(--surface);color:var(--accent);font-weight:700;cursor:pointer}
 #hint{min-height:1.4em;margin:6px 0 0}
+#vid{width:100%;max-height:60vh;background:#000;border-radius:10px;object-fit:cover}
+#vmsg{margin:10px 0 0}
 </style>
 </head>
 <body>
@@ -109,6 +111,13 @@ textarea.field{resize:vertical}
   <p class="m">コピーして、メモ帳やスプレッドシートに貼り付けてください。バックアップにも使えます。</p>
   <textarea class="field" id="csv" rows="10" readonly></textarea>
   <div class="acts"><button type="button" id="cclose">閉じる</button><button type="button" class="main" id="ccopy">コピー</button></div>
+</dialog>
+
+<dialog id="vdlg">
+  <h2>バーコードをスキャン</h2>
+  <video id="vid" playsinline muted autoplay></video>
+  <p class="m" id="vmsg" aria-live="polite"></p>
+  <div class="acts"><button type="button" id="vclose">閉じる</button><button type="button" id="vphoto">写真から読み取り</button></div>
 </dialog>
 
 <dialog id="sdlg">
@@ -322,27 +331,89 @@ $('ssave').onclick=function(){
   try{localStorage.setItem(SKEY,JSON.stringify({yahooId:$('yid').value.trim(),appId:$('rid').value.trim(),accessKey:$('rkey').value.trim()}));toast('設定を保存しました')}catch(e){toast('設定を保存できませんでした')}
   $('sdlg').close()
 };
-$('scan').onclick=function(){$('shot').click()};
+var stream=null,timer=null;
+function vmsg(m){$('vmsg').textContent=m}
+function stopScan(){
+  clearInterval(timer);timer=null;
+  if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null}
+  $('vid').srcObject=null
+}
+function ensureZ(cb){
+  if(window.ZXing)return cb(true);
+  var urls=['https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js'];
+  (function load(i){
+    if(i>=urls.length)return cb(false);
+    var sc=document.createElement('script');sc.src=urls[i];
+    sc.onload=function(){cb(!!window.ZXing)};sc.onerror=function(){load(i+1)};
+    document.head.appendChild(sc)
+  })(0)
+}
+function makeReader(){
+  var Z=ZXing,H=new Map(),r=new Z.MultiFormatReader();
+  H.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.UPC_E]);
+  H.set(Z.DecodeHintType.TRY_HARDER,true);
+  r.setHints(H);return r
+}
+function decodeCanvas(reader,c){
+  var src=new ZXing.HTMLCanvasElementLuminanceSource(c);
+  return reader.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src))).getText()
+}
+function startScan(){
+  vmsg('カメラを起動しています…');
+  if(!$('vdlg').open)$('vdlg').showModal();
+  ensureZ(function(ok){
+    if(!ok){vmsg('読み取りの部品を読み込めませんでした。ネット接続を確認するか、番号を手入力してください。');return}
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vmsg('このブラウザではカメラを直接使えません。「写真から読み取り」を試してください。');return}
+    navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}).then(function(st){
+      stream=st;var v=$('vid');v.srcObject=st;v.muted=true;v.setAttribute('playsinline','');
+      return v.play()
+    }).then(function(){
+      vmsg('バーコードを画面に写してください。ピントが合うよう、少し離すと読み取りやすくなります。');
+      var reader=makeReader(),c=document.createElement('canvas'),ctx=c.getContext('2d'),busy=false;
+      timer=setInterval(function(){
+        var v=$('vid');if(!v.videoWidth||busy)return;busy=true;
+        var sc=Math.min(1,960/v.videoWidth);
+        c.width=Math.round(v.videoWidth*sc);c.height=Math.round(v.videoHeight*sc);
+        ctx.drawImage(v,0,0,c.width,c.height);
+        try{
+          var t=decodeCanvas(reader,c);
+          if(/^19[12]\d{10}$/.test(t)){vmsg('下段のバーコードです。上段(978または979で始まる)を写してください。')}
+          else{stopScan();$('vdlg').close();gotCode(t)}
+        }catch(e){}
+        busy=false
+      },250)
+    }).catch(function(e){
+      var n=e&&e.name||'error';
+      vmsg(n==='NotAllowedError'?'カメラの使用が許可されていません。iPhoneの設定アプリ → Safari → カメラ で、このサイトを許可してください。':'カメラを起動できませんでした('+n+')。「写真から読み取り」を試してください。')
+    })
+  })
+}
+$('scan').onclick=startScan;
+$('vdlg').addEventListener('close',stopScan);
+$('vclose').onclick=function(){$('vdlg').close()};
+$('vphoto').onclick=function(){$('vdlg').close();$('shot').click()};
 $('shot').onchange=function(){
-  var f=this.files&&this.files[0];if(!f)return;this.value='';
-  if(!window.ZXing){setHint('読み取り機能を読み込めませんでした。番号を手入力してください。');return}
-  setHint('読み取り中…');
-  var r=new FileReader();
-  r.onload=function(){
-    var img=new Image();
+  var inp=this,f=inp.files&&inp.files[0];
+  if(!f){setHint('写真が選択されませんでした。');return}
+  setHint('写真を受け取りました。読み取り中…');
+  ensureZ(function(ok){
+    if(!ok){inp.value='';setHint('読み取りの部品を読み込めませんでした。ネット接続を確認するか、番号を手入力してください。');return}
+    var url=URL.createObjectURL(f),img=new Image();
     img.onload=function(){
-      var s=Math.min(1,1400/Math.max(img.width,img.height)),c=document.createElement('canvas');
-      c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
-      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var H=new Map(),Z=ZXing;
-      H.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.UPC_E]);
-      H.set(Z.DecodeHintType.TRY_HARDER,true);
-      new Z.BrowserMultiFormatReader(H).decodeFromImageUrl(c.toDataURL('image/jpeg',.9)).then(function(res){gotCode(res.getText())},function(){setHint('読み取れませんでした。バーコードを大きく、ピントを合わせて撮り直してください。')})
+      try{
+        var sc=Math.min(1,1400/Math.max(img.width,img.height)),c=document.createElement('canvas');
+        c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        var t=decodeCanvas(makeReader(),c);
+        URL.revokeObjectURL(url);inp.value='';gotCode(t)
+      }catch(e){
+        URL.revokeObjectURL(url);inp.value='';
+        setHint(e instanceof ZXing.NotFoundException?'バーコードを見つけられませんでした。大きく、ピントを合わせて撮り直してください。':'読み取りに失敗しました('+((e&&e.name)||e)+')')
+      }
     };
-    img.onerror=function(){setHint('写真を読み込めませんでした。もう一度撮影してください。')};
-    img.src=r.result
-  };
-  r.readAsDataURL(f)
+    img.onerror=function(){URL.revokeObjectURL(url);inp.value='';setHint('写真を読み込めませんでした(形式に対応していない可能性があります)。')};
+    img.src=url
+  })
 };
 chips();render();
 </script>
