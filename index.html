@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>コレクション管理</title>
+<style>
+:root{--bg:#f3f5f7;--surface:#fff;--ink:#1b2430;--muted:#5d6b7a;--line:#d9dfe6;--accent:#2457d6;--on-accent:#fff;--tag:#ffd84d;--tag-ink:#1b2430;--danger:#c0392b;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161c;--surface:#1b222b;--ink:#e8edf3;--muted:#98a5b3;--line:#2b3541;--accent:#7aa2ff;--on-accent:#10151c;--danger:#ff8b7d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12161c;--surface:#1b222b;--ink:#e8edf3;--muted:#98a5b3;--line:#2b3541;--accent:#7aa2ff;--on-accent:#10151c;--danger:#ff8b7d;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px 16px 110px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+h1{font-size:22px;margin:0;font-weight:700;letter-spacing:.02em}
+.count{color:var(--muted);font-size:14px;margin:2px 0 0}
+.total{background:var(--tag);color:var(--tag-ink);padding:6px 14px 6px 22px;font-weight:700;font-size:15px;clip-path:polygon(12px 0,100% 0,100% 100%,12px 100%,0 50%);white-space:nowrap}
+input,select,textarea,button{font:inherit;color:inherit}
+.field{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.field:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bar{display:grid;grid-template-columns:1fr 110px;gap:8px;margin-bottom:10px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px}
+.chip{flex:none;padding:6px 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.row{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;width:100%;text-align:left;padding:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.thumb{width:56px;height:56px;border-radius:6px;background:var(--bg);display:grid;place-items:center;font-size:26px;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.t{font-weight:600;overflow-wrap:anywhere}
+.m{color:var(--muted);font-size:13px}
+.p{font-weight:700;font-variant-numeric:tabular-nums}
+.empty{text-align:center;color:var(--muted);padding:40px 12px}
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));padding:14px 22px;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}
+.ghost{position:fixed;left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));padding:12px 16px;border:1px solid var(--line);border-radius:999px;background:var(--surface);cursor:pointer}
+dialog{width:min(560px,calc(100% - 24px));max-height:calc(100% - 24px);padding:18px;border:0;border-radius:14px;background:var(--surface);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog h2{margin:0 0 12px;font-size:18px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.acts{display:flex;gap:8px;margin-top:16px}
+.acts button{flex:1;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer}
+.acts .main{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:700}
+.acts .del{color:var(--danger)}
+.prev{width:96px;height:96px;border-radius:8px;object-fit:cover;margin-top:8px;display:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;display:none;max-width:90%}
+textarea.field{resize:vertical}
+.scanrow{display:grid;grid-template-columns:1fr auto;gap:8px}
+.scanbtn{padding:0 16px;border:1px solid var(--accent);border-radius:8px;background:var(--surface);color:var(--accent);font-weight:700;cursor:pointer}
+#hint{min-height:1.4em;margin:6px 0 0}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>コレクション管理</h1><p class="count" id="count"></p></div>
+    <div class="total" id="total"></div>
+  </header>
+  <div class="bar">
+    <input class="field" id="q" type="search" placeholder="タイトル・保管場所で検索" aria-label="検索">
+    <select class="field" id="fs" aria-label="状態で絞り込み"></select>
+  </div>
+  <div class="chips" id="chips"></div>
+  <ul class="list" id="list"></ul>
+</main>
+<button class="ghost" id="exp">CSV</button>
+<button class="ghost" id="set" style="left:86px">設定</button>
+<button class="fab" id="add">＋ 追加</button>
+<div class="toast" id="toast" role="status"></div>
+
+<dialog id="dlg">
+  <form id="f">
+    <h2 id="dt">アイテムを追加</h2>
+    <label for="code">バーコード(JAN・ISBN)</label>
+    <div class="scanrow"><input class="field" id="code" inputmode="numeric" placeholder="13桁の番号"><button type="button" class="scanbtn" id="scan">📷 読み取り</button></div>
+    <input id="shot" type="file" accept="image/*" capture="environment" hidden>
+    <p class="m" id="hint" aria-live="polite"></p>
+    <label for="title">タイトル</label>
+    <input class="field" id="title" required>
+    <div class="two">
+      <div><label for="cat">カテゴリ</label><select class="field" id="cat"></select></div>
+      <div><label for="st">状態</label><select class="field" id="st"></select></div>
+    </div>
+    <div class="two">
+      <div><label for="price">購入価格(円)</label><input class="field" id="price" type="number" inputmode="numeric" min="0"></div>
+      <div><label for="date">購入日</label><input class="field" id="date" type="date"></div>
+    </div>
+    <div class="two">
+      <div><label for="shop">購入先</label><input class="field" id="shop"></div>
+      <div><label for="loc">保管場所</label><input class="field" id="loc" placeholder="棚A・2段目"></div>
+    </div>
+    <label for="note">メモ</label>
+    <textarea class="field" id="note" rows="2"></textarea>
+    <label for="photo">写真</label>
+    <input id="photo" type="file" accept="image/*">
+    <img class="prev" id="prev" alt="選択した写真">
+    <div class="acts">
+      <button type="button" id="cancel">閉じる</button>
+      <button type="button" class="del" id="del" hidden>削除</button>
+      <button type="button" id="savenext">保存して次へ</button>
+      <button type="submit" class="main">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="cdlg">
+  <h2>CSVで書き出し</h2>
+  <p class="m">コピーして、メモ帳やスプレッドシートに貼り付けてください。バックアップにも使えます。</p>
+  <textarea class="field" id="csv" rows="10" readonly></textarea>
+  <div class="acts"><button type="button" id="cclose">閉じる</button><button type="button" class="main" id="ccopy">コピー</button></div>
+</dialog>
+
+<dialog id="sdlg">
+  <h2>自動入力の設定</h2>
+  <p class="m">書籍(漫画など)は設定なしで自動入力されます。ゲームや雑貨も検索するには、Yahoo!デベロッパーのClient ID、または楽天ウェブサービスのアプリIDとアクセスキーを入力してください(どちらか一方で動作します)。入力した値はこの端末のブラウザにだけ保存されます。</p>
+  <label for="yid">Yahoo!ショッピング Client ID(どちらか一方でOK)</label>
+  <input class="field" id="yid" autocomplete="off" autocapitalize="off">
+  <label for="rid">楽天 アプリID</label>
+  <input class="field" id="rid" autocomplete="off" autocapitalize="off">
+  <label for="rkey">楽天 アクセスキー</label>
+  <input class="field" id="rkey" type="password" autocomplete="off" autocapitalize="off">
+  <div class="acts"><button type="button" id="sclose">閉じる</button><button type="button" class="main" id="ssave">保存</button></div>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+<script>
+var KEY='collection-v1';
+var CATS=['ゲーム','漫画','雑貨','その他'];
+var ICON={'ゲーム':'🎮','漫画':'📚','雑貨':'🧸','その他':'📦'};
+var STS=['未開封','所持中','プレイ・読了済み','売却予定','売却済み'];
+var items=load(), fc='すべて', editing=null, photoData='', delArm=false;
+var $=function(i){return document.getElementById(i)};
+
+function load(){try{var v=JSON.parse(localStorage.getItem(KEY));return Array.isArray(v)?v:[]}catch(e){return []}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(items));return true}catch(e){toast('保存できませんでした。写真を減らすか、CSVで書き出してください。');return false}}
+function toast(m){var t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(function(){t.style.display='none'},3200)}
+function yen(n){return '¥'+Number(n||0).toLocaleString('ja-JP')}
+function opts(sel,arr,all){sel.innerHTML='';(all?[all].concat(arr):arr).forEach(function(v){var o=document.createElement('option');o.value=v;o.textContent=v;sel.appendChild(o)})}
+
+opts($('cat'),CATS);opts($('st'),STS);opts($('fs'),STS,'すべての状態');$('st').value='所持中';
+
+function chips(){
+  var c=$('chips');c.innerHTML='';
+  ['すべて'].concat(CATS).forEach(function(n){
+    var b=document.createElement('button');b.className='chip';b.type='button';b.textContent=n;
+    b.setAttribute('aria-pressed',n===fc);
+    b.onclick=function(){fc=n;chips();render()};
+    c.appendChild(b)
+  })
+}
+
+function render(){
+  var q=$('q').value.trim().toLowerCase(), fs=$('fs').value;
+  var shown=items.filter(function(it){
+    if(fc!=='すべて'&&it.cat!==fc)return false;
+    if(fs!=='すべての状態'&&it.st!==fs)return false;
+    if(q&&(it.title+' '+(it.loc||'')+' '+(it.shop||'')+' '+(it.code||'')).toLowerCase().indexOf(q)<0)return false;
+    return true
+  });
+  var owned=items.filter(function(i){return i.st!=='売却済み'});
+  $('count').textContent=items.length+'点を登録中(絞り込み結果 '+shown.length+'点)';
+  $('total').textContent='所持品 '+yen(owned.reduce(function(s,i){return s+(Number(i.price)||0)},0));
+  var ul=$('list');ul.innerHTML='';
+  if(!shown.length){
+    var e=document.createElement('li');e.className='empty';
+    e.textContent=items.length?'条件に合うアイテムがありません。':'まだ何もありません。「＋ 追加」から最初の1点を登録しましょう。';
+    ul.appendChild(e);return
+  }
+  shown.slice().sort(function(a,b){return (b.added||0)-(a.added||0)}).forEach(function(it){
+    var li=document.createElement('li'),b=document.createElement('button');b.className='row';b.type='button';
+    var th=document.createElement('div');th.className='thumb';
+    if(it.photo){var im=document.createElement('img');im.src=it.photo;im.alt='';th.appendChild(im)}else{th.textContent=ICON[it.cat]||'📦'}
+    var mid=document.createElement('div'),t=document.createElement('div');t.className='t';t.textContent=it.title;
+    var m=document.createElement('div');m.className='m';
+    m.textContent=[it.cat,it.st,it.loc].filter(Boolean).join(' / ');
+    mid.appendChild(t);mid.appendChild(m);
+    var p=document.createElement('div');p.className='p';p.textContent=it.price!==''&&it.price!=null?yen(it.price):'';
+    b.appendChild(th);b.appendChild(mid);b.appendChild(p);
+    b.onclick=function(){openForm(it)};
+    li.appendChild(b);ul.appendChild(li)
+  })
+}
+
+function openForm(it){
+  editing=it||null;photoData=it&&it.photo||'';delArm=false;
+  $('dt').textContent=it?'アイテムを編集':'アイテムを追加';
+  $('title').value=it?it.title:'';$('cat').value=it?it.cat:(fc!=='すべて'?fc:CATS[0]);$('st').value=it?it.st:'所持中';
+  $('price').value=it&&it.price!=null?it.price:'';$('date').value=it?it.date||'':'';
+  $('shop').value=it?it.shop||'':'';$('loc').value=it?it.loc||'':'';$('note').value=it?it.note||'':'';$('code').value=it?it.code||'':'';$('hint').textContent='';
+  $('photo').value='';
+  var pv=$('prev');if(photoData){pv.src=photoData;pv.style.display='block'}else{pv.style.display='none'}
+  var d=$('del');d.hidden=!it;d.textContent='削除';
+  $('dlg').showModal()
+}
+
+$('photo').onchange=function(){
+  var f=this.files&&this.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var s=Math.min(1,360/Math.max(img.width,img.height)),c=document.createElement('canvas');
+      c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      photoData=c.toDataURL('image/jpeg',.65);
+      var pv=$('prev');pv.src=photoData;pv.style.display='block'
+    };
+    img.onerror=function(){toast('この写真は読み込めませんでした。別の写真を選んでください。')};
+    img.src=r.result
+  };
+  r.readAsDataURL(f)
+};
+
+$('f').onsubmit=function(e){
+  e.preventDefault();var go=again;again=false;
+  var p=$('price').value;
+  var data={title:$('title').value.trim(),cat:$('cat').value,st:$('st').value,price:p===''?'':Number(p),date:$('date').value,shop:$('shop').value.trim(),code:$('code').value.trim().replace(/\D/g,''),loc:$('loc').value.trim(),note:$('note').value.trim(),photo:photoData};
+  if(!data.title)return;
+  if(editing){Object.assign(editing,data)}else{data.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);data.added=Date.now();items.push(data)}
+  if(save()){var ct=data.cat;$('dlg').close();render();toast('保存しました');if(go){openForm(null);$('cat').value=ct;$('shot').click()}}
+};
+$('del').onclick=function(){
+  if(!delArm){delArm=true;this.textContent='もう一度押すと削除';return}
+  items=items.filter(function(i){return i!==editing});save();$('dlg').close();render();toast('削除しました')
+};
+$('cancel').onclick=function(){$('dlg').close()};
+$('add').onclick=function(){openForm(null)};
+$('q').oninput=render;$('fs').onchange=render;
+
+function esc(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+$('exp').onclick=function(){
+  var rows=[['タイトル','カテゴリ','状態','購入価格','購入日','購入先','保管場所','メモ','バーコード']];
+  items.forEach(function(i){rows.push([i.title,i.cat,i.st,i.price,i.date,i.shop,i.loc,i.note,i.code])});
+  $('csv').value=rows.map(function(r){return r.map(esc).join(',')}).join('\n');
+  $('cdlg').showModal()
+};
+$('cclose').onclick=function(){$('cdlg').close()};
+$('ccopy').onclick=function(){
+  var t=$('csv');t.select();
+  var ok=false;try{ok=document.execCommand('copy')}catch(e){}
+  if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value).then(function(){toast('コピーしました')},function(){toast('コピーできませんでした。テキストを長押ししてコピーしてください。')});return}
+  toast(ok?'コピーしました':'コピーできませんでした。テキストを長押ししてコピーしてください。')
+};
+function setHint(m){$('hint').textContent=m}
+var SKEY='collection-settings-v1',again=false;
+function getCfg(){try{return JSON.parse(localStorage.getItem(SKEY))||{}}catch(e){return {}}}
+function fetchJson(url){
+  var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},8000);
+  return fetch(url,{signal:ctl.signal}).then(function(r){clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+}
+function lookupBook(code){
+  return fetchJson('https://api.openbd.jp/v1/get?isbn='+code).then(function(a){
+    var m=a&&a[0]&&a[0].summary;if(!m||!m.title)return null;
+    var t=m.title;if(m.volume&&t.indexOf(m.volume)<0)t+=' '+m.volume;
+    return {title:t,note:[m.author,m.publisher].filter(Boolean).join(' / ')}
+  })
+}
+function lookupRakuten(code){
+  var c=getCfg();if(!c.appId||!c.accessKey)return Promise.resolve(null);
+  var u='https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701?applicationId='+encodeURIComponent(c.appId)+'&accessKey='+encodeURIComponent(c.accessKey)+'&keyword='+encodeURIComponent(code)+'&hits=1&formatVersion=2';
+  return fetchJson(u).then(function(d){
+    var it=(d.Items||d.items||[])[0];if(!it)return null;it=it.Item||it;
+    return it.itemName?{title:String(it.itemName).slice(0,80),note:''}:null
+  })
+}
+function lookupGoogle(code){
+  return fetchJson('https://www.googleapis.com/books/v1/volumes?q=isbn:'+code+'&maxResults=1').then(function(d){
+    var v=d&&d.items&&d.items[0]&&d.items[0].volumeInfo;if(!v||!v.title)return null;
+    var t=v.title;if(v.subtitle)t+=' '+v.subtitle;
+    return {title:t,note:(v.authors||[]).concat(v.publisher?[v.publisher]:[]).join(' / ')}
+  })
+}
+function lookupYahoo(code){
+  var c=getCfg();if(!c.yahooId)return Promise.resolve(null);
+  return fetchJson('https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch?appid='+encodeURIComponent(c.yahooId)+'&jan_code='+encodeURIComponent(code)).then(function(d){
+    var h=d&&d.hits&&d.hits[0];return h&&h.name?{title:String(h.name).slice(0,80),note:''}:null
+  })
+}
+function tryChain(fs,code){
+  var i=0,failed=false;
+  function next(){
+    if(i>=fs.length)return Promise.resolve({r:null,failed:failed});
+    return fs[i++](code).then(function(r){return r?{r:r}:next()},function(){failed=true;return next()})
+  }
+  return next()
+}
+function lookup(code){
+  var seq=++lookup.n,isBook=/^97[89]/.test(code),c=getCfg();
+  setHint('商品情報を検索中…');
+  var fs=(isBook?[lookupBook,lookupGoogle]:[]).concat([lookupYahoo,lookupRakuten]);
+  tryChain(fs,code).then(function(o){
+    if(seq!==lookup.n)return;
+    if(o.r){
+      if(!$('title').value.trim())$('title').value=o.r.title;
+      if(o.r.note&&!$('note').value.trim())$('note').value=o.r.note;
+      setHint('商品情報を入力しました。内容を確認してください。');return
+    }
+    var keyed=c.yahooId||(c.appId&&c.accessKey);
+    setHint(o.failed?'商品情報を取得できませんでした(通信エラーの可能性があります)。タイトルを入力してください。'
+      :keyed||isBook?'商品情報が見つかりませんでした。タイトルを入力してください。'
+      :'商品情報が見つかりませんでした。タイトルを入力してください(同じバーコードは次回から引き継がれます)。ゲームや雑貨も自動入力したい場合は、左下の「設定」でYahoo!または楽天のIDを登録できます。')
+  })
+}
+lookup.n=0;
+function gotCode(code){
+  if(code.length===13&&/^19[12]/.test(code)){setHint('下段のバーコードを読み取りました。上段(978または979で始まる)を撮影してください。');return}
+  $('code').value=code;
+  var prev=items.filter(function(i){return i.code===code&&i!==editing})[0];
+  if(prev&&!editing&&!$('title').value.trim()){
+    $('title').value=prev.title;$('cat').value=prev.cat;
+    setHint('以前登録した同じバーコードの内容を引き継ぎました。');return
+  }
+  if(/^97[89]/.test(code)&&!editing&&$('cat').value==='ゲーム'&&!$('title').value.trim()){$('cat').value='漫画'}
+  if(!$('title').value.trim())lookup(code);else setHint('読み取りました('+code+')')
+}
+$('savenext').onclick=function(){again=true;if($('f').requestSubmit)$('f').requestSubmit();else{again=false;$('f').dispatchEvent(new Event('submit',{cancelable:true}))}};
+$('code').onchange=function(){var v=this.value.replace(/\D/g,'');if(v.length===13||v.length===8)gotCode(v)};
+$('set').onclick=function(){var c=getCfg();$('yid').value=c.yahooId||'';$('rid').value=c.appId||'';$('rkey').value=c.accessKey||'';$('sdlg').showModal()};
+$('sclose').onclick=function(){$('sdlg').close()};
+$('ssave').onclick=function(){
+  try{localStorage.setItem(SKEY,JSON.stringify({yahooId:$('yid').value.trim(),appId:$('rid').value.trim(),accessKey:$('rkey').value.trim()}));toast('設定を保存しました')}catch(e){toast('設定を保存できませんでした')}
+  $('sdlg').close()
+};
+$('scan').onclick=function(){$('shot').click()};
+$('shot').onchange=function(){
+  var f=this.files&&this.files[0];if(!f)return;this.value='';
+  if(!window.ZXing){setHint('読み取り機能を読み込めませんでした。番号を手入力してください。');return}
+  setHint('読み取り中…');
+  var r=new FileReader();
+  r.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var s=Math.min(1,1400/Math.max(img.width,img.height)),c=document.createElement('canvas');
+      c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      var H=new Map(),Z=ZXing;
+      H.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.UPC_E]);
+      H.set(Z.DecodeHintType.TRY_HARDER,true);
+      new Z.BrowserMultiFormatReader(H).decodeFromImageUrl(c.toDataURL('image/jpeg',.9)).then(function(res){gotCode(res.getText())},function(){setHint('読み取れませんでした。バーコードを大きく、ピントを合わせて撮り直してください。')})
+    };
+    img.onerror=function(){setHint('写真を読み込めませんでした。もう一度撮影してください。')};
+    img.src=r.result
+  };
+  r.readAsDataURL(f)
+};
+chips();render();
+</script>
+</body>
+</html>
